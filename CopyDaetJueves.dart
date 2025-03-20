@@ -2,6 +2,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+//speech to text
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:collection';
 
 class OpenRouterWidget extends StatefulWidget {
   final String apiKey;
@@ -25,10 +29,16 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
   final Queue<String> textQueue = Queue<String>();
   String _response = '';
   bool _isLoading = false;
+  //input voice 
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+  String _text = '';
+
   
 @override
   void initState() {
     super.initState();
+    _speech = stt.SpeechToText();
     _initTts();
 }
   Future<String> _getOpenRouterResponse(
@@ -108,7 +118,28 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       });
     }
   }
-
+//inpit
+  Future<void> _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) => print('onStatus: $val'),
+        onError: (val) => print('onError: $val'),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) => setState(() {
+            _text = val.recognizedWords;
+          }),
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+      _addToQueue(_text);
+      _text = ''; // Limpia el texto después de agregarlo a la cola.
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -160,6 +191,13 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
             Text('Queue: ${textQueue.toList()}'),
          // ] added 
         ],
+        //pres d Burton 
+        ElevatedButton(
+              onPressed: _listen,
+              child: Text(_isListening ? 'Stop Listening' : 'Start Listening'),
+            ),
+            Text('Queue: ${textQueue.toList()}'),
+        
       ),
     );
   }
