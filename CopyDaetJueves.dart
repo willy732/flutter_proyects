@@ -20,9 +20,17 @@ class OpenRouterWidget extends StatefulWidget {
 
 class _OpenRouterWidgetState extends State<OpenRouterWidget> {
   final TextEditingController _inputController = TextEditingController();
+  //text a voz
+  final FlutterTts flutterTts = FlutterTts();
+  final Queue<String> textQueue = Queue<String>();
   String _response = '';
   bool _isLoading = false;
-
+  
+@override
+  void initState() {
+    super.initState();
+    _initTts();
+}
   Future<String> _getOpenRouterResponse(
     String apiKey,
     String siteUrl,
@@ -74,6 +82,31 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       _response = response;
       _isLoading = false;
     });
+  }
+  //output 
+  Future _initTts() async {
+    await flutterTts.setLanguage("es-ES"); // Establece el idioma a español
+    await flutterTts.setPitch(1);
+    await flutterTts.setSpeechRate(0.5);
+  }
+  Future _speak(String text) async {
+    await flutterTts.speak(text);
+  }
+  void _addToQueue(String text) {
+    setState(() {
+      textQueue.add(text);
+    });
+  }
+
+  void _readQueue() {
+    if (textQueue.isNotEmpty) {
+      String text = textQueue.first;
+      _speak(text).then((_) {
+        setState(() {
+          textQueue.removeFirst();
+        });
+      });
+    }
   }
 
   @override
