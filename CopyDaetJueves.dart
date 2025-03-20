@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:collection';
-
 import 'package:flutter_tts/flutter_tts.dart';
 
 class OpenRouterWidget extends StatefulWidget {
@@ -30,10 +29,12 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
   final Queue<String> textQueue = Queue<String>();
   String _response = '';
   bool _isLoading = false;
+
   //input voice
   late stt.SpeechToText _speech;
   bool _isListening = false;
-  String _text = '';
+  String _text = 'Presiona el botón y comienza a hablar';
+  String _listeningMessage = ''; // Variable para el mensaje
 
   @override
   void initState() {
@@ -68,7 +69,10 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       if (response.statusCode == 200) {
         final decodedResponse = jsonDecode(response.body);
         final content = decodedResponse['choices'][0]['message']['content'];
-        return content;
+        final cleanedContent =
+            RegExp(r'\\boxed\{(.+?)\}').firstMatch(content)?.group(1) ??
+            content;
+        return cleanedContent;
       } else {
         return 'Error: ${response.statusCode}, ${response.body}';
       }
@@ -82,15 +86,22 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       _isLoading = true;
       _response = ''; // Clear previous response
     });
+
     final prompt = _inputController.text;
+
+    // Espera a que _getOpenRouterResponse complete y devuelva un valor
     final response = await _getOpenRouterResponse(
       widget.apiKey,
       widget.siteUrl,
       widget.siteName,
       prompt,
     );
+
+    // Este setState se ejecutará después de que la llamada a _getOpenRouterResponse haya completado
     setState(() {
       _response = response;
+      _addToQueue(_response);
+      _textController.clear();
       _isLoading = false;
     });
   }
@@ -123,27 +134,76 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
     }
   }
 
-  //inpit
-  Future<void> _listen() async {
+  void _listen() async {
     if (!_isListening) {
-      bool available = await _speech.initialize(
-        onStatus: (val) => print('onStatus: $val'),
-        onError: (val) => print('onError: $val'),
-      );
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult:
-              (val) => setState(() {
-                _text = val.recognizedWords;
-              }),
+      var status = await Permission.microphone.request();
+
+      if (status.isGranted) {
+        bool available = await _speech.initialize(
+          onStatus: (val) => print('estado: $val'),
+          onError: (val) => print('onError: $val'),
+        );
+        if (available) {
+          setState(() {
+            _isListening = true;
+            _listeningMessage = 'Escuchando...';
+          });
+          _speech.listen(
+            onResult:
+                (val) => setState(() {
+                  _text = val.recognizedWords;
+                }),
+            onError: (val) {
+              setState(() {
+                _isListening = false;
+                _listeningMessage = 'Error al escuchar: ${val.errorMsg}';
+              });
+            },
+          );
+        } else {
+          setState(() {
+            _listeningMessage = 'Reconocimiento de voz no disponible.';
+          });
+        }
+      } else if (status.isPermanentlyDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Permiso de micrófono denegado permanentemente. Habilítalo en la configuración.',
+            ),
+            action: SnackBarAction(
+              label: 'Configuración',
+              onPressed: () {
+                openAppSettings();
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Permiso de micrófono denegado. Habilítalo en la configuración.',
+            ),
+            action: SnackBarAction(
+              label: 'Configuración',
+              onPressed: () {
+                openAppSettings();
+              },
+            ),
+          ),
         );
       }
     } else {
-      setState(() => _isListening = false);
+      setState(() {
+        _isListening = false;
+        _listeningMessage = '';
+      });
       _speech.stop();
-      _addToQueue(_text);
-      _text = ''; // Limpia el texto después de agregarlo a la cola.
+      if (_text.isNotEmpty) {
+        _addToQueue(_text);
+        _text = '';
+      }
     }
   }
 
@@ -167,40 +227,16 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
             child: _isLoading ? CircularProgressIndicator() : Text('Send'),
           ),
           SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Container(
-                padding: EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(4.0),
-                ),
-                child: Text(_response),
-              ),
-            ),
-          ),
-          //[ output
-          TextField(
-            controller: _textController,
-            decoration: InputDecoration(labelText: 'Enter text'),
-          ),
+          SelectableText('${textQueue.toList()}'),
           ElevatedButton(
-            onPressed: () {
-              _addToQueue(_textController.text);
-              _textController.clear();
-            },
-            child: Text('Add to Queue'),
+            onPressed: _readQueue,
+            child: Text('leer la respuesta'),
           ),
-          ElevatedButton(onPressed: _readQueue, child: Text('Read Queue')),
-          Text('Queue: ${textQueue.toList()}'),
-          // ] added
-
           //pres d Burton
           ElevatedButton(
             onPressed: _listen,
-            child: Text(_isListening ? 'Stop Listening' : 'Start Listening'),
+            child: Icon(_isListening ? Icons.mic_off : Icons.mic),
           ),
-          Text('Queue: ${textQueue.toList()}'),
         ],
       ),
     );
@@ -212,10 +248,15 @@ class MyMainWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('OpenRouter App')),
+      //floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      // floatingActionButton: FloatingActionButton(
+      // onPressed: _listen,
+      // child: Icon(_isListening ? Icons.mic_off : Icons.mic),
+      //),
       body: Center(
         child: OpenRouterWidget(
           apiKey:
-              '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', // Aquí va tu API Key
+              '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', // Aquí va tu API Key
           siteUrl: 'http://example.com', // Reemplaza con tu URL
           siteName: 'Mi App', // Reemplaza con el nombre de tu sitio
         ),
