@@ -1,11 +1,11 @@
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-//speech to text
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:collection';
+
+import 'package:flutter_tts/flutter_tts.dart';
 
 class OpenRouterWidget extends StatefulWidget {
   final String apiKey;
@@ -23,24 +23,25 @@ class OpenRouterWidget extends StatefulWidget {
 }
 
 class _OpenRouterWidgetState extends State<OpenRouterWidget> {
-  final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _inputController = TextEditingController(); //o
+  final TextEditingController _textController = TextEditingController();
   //text a voz
   final FlutterTts flutterTts = FlutterTts();
   final Queue<String> textQueue = Queue<String>();
   String _response = '';
   bool _isLoading = false;
-  //input voice 
+  //input voice
   late stt.SpeechToText _speech;
   bool _isListening = false;
   String _text = '';
 
-  
-@override
+  @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
     _initTts();
-}
+  }
+
   Future<String> _getOpenRouterResponse(
     String apiKey,
     String siteUrl,
@@ -93,15 +94,18 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       _isLoading = false;
     });
   }
-  //output 
+
+  //output
   Future _initTts() async {
     await flutterTts.setLanguage("es-ES"); // Establece el idioma a español
     await flutterTts.setPitch(1);
     await flutterTts.setSpeechRate(0.5);
   }
+
   Future _speak(String text) async {
     await flutterTts.speak(text);
   }
+
   void _addToQueue(String text) {
     setState(() {
       textQueue.add(text);
@@ -118,7 +122,8 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       });
     }
   }
-//inpit
+
+  //inpit
   Future<void> _listen() async {
     if (!_isListening) {
       bool available = await _speech.initialize(
@@ -128,9 +133,10 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       if (available) {
         setState(() => _isListening = true);
         _speech.listen(
-          onResult: (val) => setState(() {
-            _text = val.recognizedWords;
-          }),
+          onResult:
+              (val) => setState(() {
+                _text = val.recognizedWords;
+              }),
         );
       }
     } else {
@@ -140,6 +146,7 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
       _text = ''; // Limpia el texto después de agregarlo a la cola.
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -172,32 +179,29 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
               ),
             ),
           ),
-          //[ output 
-            TextField(
-              controller: _textController,
-              decoration: InputDecoration(labelText: 'Enter text'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                _addToQueue(_textController.text);
-                _textController.clear();
-              },
-              child: Text('Add to Queue'),
-            ),
-            ElevatedButton(
-              onPressed: _readQueue,
-              child: Text('Read Queue'),
-            ),
-            Text('Queue: ${textQueue.toList()}'),
-         // ] added 
+          //[ output
+          TextField(
+            controller: _textController,
+            decoration: InputDecoration(labelText: 'Enter text'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _addToQueue(_textController.text);
+              _textController.clear();
+            },
+            child: Text('Add to Queue'),
+          ),
+          ElevatedButton(onPressed: _readQueue, child: Text('Read Queue')),
+          Text('Queue: ${textQueue.toList()}'),
+          // ] added
+
+          //pres d Burton
+          ElevatedButton(
+            onPressed: _listen,
+            child: Text(_isListening ? 'Stop Listening' : 'Start Listening'),
+          ),
+          Text('Queue: ${textQueue.toList()}'),
         ],
-        //pres d Burton 
-        ElevatedButton(
-              onPressed: _listen,
-              child: Text(_isListening ? 'Stop Listening' : 'Start Listening'),
-            ),
-            Text('Queue: ${textQueue.toList()}'),
-        
       ),
     );
   }
