@@ -141,6 +141,24 @@ class _OpenRouterWidgetState extends State<OpenRouterWidget> {
               ),
             ),
           ),
+          //[ output 
+            TextField(
+              controller: _textController,
+              decoration: InputDecoration(labelText: 'Enter text'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _addToQueue(_textController.text);
+                _textController.clear();
+              },
+              child: Text('Add to Queue'),
+            ),
+            ElevatedButton(
+              onPressed: _readQueue,
+              child: Text('Read Queue'),
+            ),
+            Text('Queue: ${textQueue.toList()}'),
+         // ] added 
         ],
       ),
     );
